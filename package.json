@@ -1,5 +1,5 @@
 {
-  "name": "mailmanager",
+  "name": "vmail-server-manager",
   "dependencies": {
     "mysql": "~2.0.0-alpha9",
     "express": "~3.4.4",
