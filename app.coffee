@@ -1,73 +1,71 @@
-express = require('express')
+#!/usr/bin/env coffee
 mysql = require('mysql')
 path = require('path')
+argv = require('optimist').argv
 
 config = require('./config.json')
-connection = mysql.createConnection(config.db)
 
-app = express()
+class VMail
+  constructor: ->
+    @connection = mysql.createConnection(config.db)
 
-app.use(express.basicAuth(config.user, config.password))
-app.set('views', path.join(__dirname, 'views'))
-app.set('view engine', 'jade')
-app.use(express.urlencoded())
-app.use(express.bodyParser())
-app.use(express.methodOverride())
-app.use(app.router)
-app.use(express.static(path.join(__dirname, 'public')))
+  close: ->
+    @connection.end()
 
-app.get '/', (req, res) ->
-  connection.query 'SELECT * FROM virtual_domains', (err, domains) ->
-    return res.send(500, err) if err?
-    connection.query 'SELECT * FROM virtual_users', (err, accounts) ->
-      return res.send(500, err) if err?
-      res.render('index', { domains: domains, accounts: accounts })
+  list: (cb) ->
+    @connection.query 'SELECT * FROM virtual_domains', (err, domains) =>
+      return cb(err) if err?
+      @connection.query 'SELECT * FROM virtual_users', (err, accounts) ->
+        return cb(err) if err?
+        cb(null, domains, accounts)
 
-app.post '/add_domain', (req, res) ->
-  domain = req.body.domain
-  if domain
-    connection.query 'INSERT INTO virtual_domains (name) VALUES (?)', [domain], (err) ->
-      return res.send(500, err) if err?
-      res.redirect('/')
-  else
-    throw "missing params"
+  addDomain: (domain, cb) ->
+    if domain
+      @connection.query 'INSERT INTO virtual_domains (name) VALUES (?)', [domain], (err) ->
+        cb(err)
+    else
+      cb(new Error("Missing domain"))
 
-app.post '/add_account', (req, res) ->
-  email = req.body.email
-  password = req.body.password
+  addAccount: (email, password, cb) ->
+    if !email
+      cb(new Error("Missing email"))
+    else if !password
+      cb(new Error("Missing password"))
+    else
+      parts = email.split('@')
+      return cb(new Error("invalid email")) unless parts.length > 1
 
-  if email and password
-    parts = email.split('@')
-    throw "invalid email" unless parts.length > 1
-    domain = parts[parts.length - 1]
+      domain = parts[parts.length - 1]
+      @connection.query 'SELECT id FROM virtual_domains WHERE name=?', [domain], (err, domains) =>
+        return cb(err) if err?
+        return cb(new Error("Domain not found")) unless domains.length > 0
 
-    connection.query 'SELECT id FROM virtual_domains WHERE name=?', [domain], (err, domains) ->
-      return res.send(500, err) if err?
-      return res.send(404, "domain not found") unless domains.length > 0
+        domain = domains[0]
+        @connection.query 'INSERT INTO virtual_users (domain_id, password, email) VALUES (?, MD5(?), ?)', [domain.id, password, email], (err) ->
+          cb(err)
 
-      domain = domains[0]
-      connection.query 'INSERT INTO virtual_users (domain_id, password, email) VALUES (?, MD5(?), ?)', [domain.id, password, email], (err) ->
-        res.redirect('/')
-  else
-    throw "missing params"
+m = new VMail
 
-app.get '/delete_domain', (req, res) ->
-  id = req.query.id
-  if id? and (id = parseInt(id, 10))?
-    connection.query 'DELETE FROM virtual_domains WHERE id=?', [id], (err) ->
-      return res.send(500, err) if err?
-      res.redirect('/')
-  else
-    throw "missing params"
+cb = (err) ->
+  m.close()
+  console.error(err) if err
+  return err?
 
-app.get '/delete_account', (req, res) ->
-  id = req.query.id
-  if id? and (id = parseInt(id, 10))?
-    connection.query 'DELETE FROM virtual_users WHERE id=?', [id], (err) ->
-      return res.send(500, err) if err?
-      res.redirect('/')
-  else
-    throw "missing params"
+if argv.domain
+  switch argv._[0]
+    when "add" then m.addDomain(argv.domain, cb)
+    else console.error("command must be one of [add|remove]")
 
-app.listen(3030)
+else if argv.email
+  switch argv._[0]
+    when "add" then m.addAccount(argv.email, argv.password, cb)
+    else console.error("command must be one of [add|remove]")
+
+else
+  m.list (err, domains, accounts) ->
+    return if cb(err)
+    console.log "Domains:"
+    console.log domains
+    console.log "Accounts:"
+    console.log accounts
 

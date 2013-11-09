@@ -1,5 +1,5 @@
-mailmanager
-===========
+vmail-server-manager
+====================
 
 please don't use this.
 
