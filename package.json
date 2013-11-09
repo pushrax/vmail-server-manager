@@ -1,0 +1,8 @@
+{
+  "name": "mailmanager",
+  "dependencies": {
+    "mysql": "~2.0.0-alpha9",
+    "express": "~3.4.4",
+    "jade": "~0.35.0"
+  }
+}

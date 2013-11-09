@@ -1,0 +1,10 @@
+{
+	"db": {
+		"host": "127.0.0.1",
+		"database": "mailserver",
+		"user": "mailuser",
+		"password": "password"
+	},
+	"user": "user",
+	"password": "password"
+}
